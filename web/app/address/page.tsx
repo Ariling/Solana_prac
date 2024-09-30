@@ -1,9 +1,13 @@
 'use client';
+import TransferButton from '@/components/address/send-sol';
+import TransferTokenBtn from '@/components/address/TransferTokenBtn';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { Keypair, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { useEffect, useState } from 'react';
 // import * as bs58 from 'bs58';
-import * as bip39 from 'bip39';
+// import * as bip39 from 'bip39';
+// import nacl from 'tweetnacl';
+// import { decodeUTF8 } from 'tweetnacl-util';
 
 export default function Address() {
   const { connection } = useConnection();
@@ -13,12 +17,33 @@ export default function Address() {
   // 검증하는 방법
   //   console.log(PublicKey.isOnCurve(!publicKey?.toBytes()));
   // const mnemonic = bip39.generateMnemonic();
-  const mnemonic =
-    'pill tomorrow foster begin walnut borrow virtual kick shift mutual shoe scatter';
+  // const mnemonic =
+  //   'pill tomorrow foster begin walnut borrow virtual kick shift mutual shoe scatter';
   // arguments: (mnemonic, password)
-  const seed = bip39.mnemonicToSeedSync(mnemonic, '');
-  const keypair = Keypair.fromSeed(seed.slice(0, 32));
-  console.log(`${keypair.publicKey.toBase58()}`);
+  // const seed = bip39.mnemonicToSeedSync(mnemonic, '');
+  // const keypair = Keypair.fromSeed(seed.slice(0, 32));
+  // console.log(`${keypair.publicKey.toBase58()}`);
+
+  // const keypair = Keypair.fromSecretKey(
+  //   Uint8Array.from([
+  //     174, 47, 154, 16, 202, 193, 206, 113, 199, 190, 53, 133, 169, 175, 31, 56,
+  //     222, 53, 138, 189, 224, 216, 117, 173, 10, 149, 53, 45, 73, 251, 237, 246,
+  //     15, 185, 186, 82, 177, 240, 148, 69, 241, 227, 167, 80, 141, 89, 240, 121,
+  //     121, 35, 172, 247, 68, 251, 226, 218, 48, 63, 176, 109, 168, 89, 238, 135,
+  //   ])
+  // );
+
+  // const message = 'The quick brown fox jumps over the lazy dog';
+  // const messageBytes = decodeUTF8(message);
+
+  // const signature = nacl.sign.detached(messageBytes, keypair.secretKey);
+  // const result = nacl.sign.detached.verify(
+  //   messageBytes,
+  //   signature,
+  //   keypair.publicKey.toBytes()
+  // );
+
+  // console.log(result);
 
   // code for the `getAirdropOnClick` function here
   const getAirdropOnClick = async () => {
@@ -41,16 +66,42 @@ export default function Address() {
       alert('You are Rate limited for Airdrop');
     }
   };
-  // code for the `getBalanceEvery10Seconds` and useEffect code here
+  // 잔액변경 및 3분마다 업데이트를 하는 것으로 바꿨다. 너무 많은 호출로 429에러가 뜨기 때문
   useEffect(() => {
+    let intervalId: NodeJS.Timeout;
+
     if (publicKey) {
-      (async function getBalanceEvery10Seconds() {
-        const newBalance = await connection.getBalance(publicKey);
-        setBalance(newBalance / LAMPORTS_PER_SOL);
-        setTimeout(getBalanceEvery10Seconds, 10000);
-      })();
+      const getBalance = async () => {
+        try {
+          const newBalance = await connection.getBalance(publicKey);
+          const newBalanceInSol = newBalance / LAMPORTS_PER_SOL;
+          setBalance((prevBalance) => {
+            // 잔액이 변경되었을 때만 상태 업데이트
+            if (prevBalance !== newBalanceInSol) {
+              return newBalanceInSol;
+            }
+            return prevBalance;
+          });
+        } catch (error) {
+          console.error('Failed to fetch balance:', error);
+        }
+      };
+
+      // 초기 잔액 확인
+      getBalance();
+
+      // 3분 마다 잔액 확인
+      const REFRESH_INTERVAL = 3 * 60 * 1000; // 3분
+      intervalId = setInterval(getBalance, REFRESH_INTERVAL);
     }
-  }, [publicKey, connection, balance]);
+
+    // 정리(cleanup) 함수
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [publicKey, connection]);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-evenly p-24">
@@ -66,7 +117,10 @@ export default function Address() {
             >
               Get Airdrop
             </button>
+            <TransferButton />
           </div>
+          <div>Send Token</div>
+          <TransferTokenBtn />
         </div>
       ) : (
         <h1>Wallet is not connected</h1>
